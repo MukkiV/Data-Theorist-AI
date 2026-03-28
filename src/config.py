@@ -9,12 +9,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── API Keys ──────────────────────────────────────────────────────────────────
-# Prioritize Streamlit Secrets for cloud deployment
-try:
-    import streamlit as st
-    GROQ_API_KEY: str = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY", ""))
-except ImportError:
-    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+# Prioritize environment variables (.env), fallback to Streamlit Secrets
+GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+
+# If not found in .env, try Streamlit (only if running as a web app)
+if not GROQ_API_KEY:
+    try:
+        import streamlit as st
+        # st.runtime.exists() is the safest way to check if we're in the app
+        if st.runtime.exists():
+            GROQ_API_KEY = st.secrets.get("GROQ_API_KEY", "")
+    except Exception:
+        # Silently fail if streamlit isn't fully initialized
+        pass
 
 # ── LLM Settings ─────────────────────────────────────────────────────────────
 GROQ_MODEL: str = "llama-3.1-8b-instant"     # Free tier fast model
@@ -25,14 +32,14 @@ LLM_MAX_TOKENS: int = 1024                  # Max tokens per response
 EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"  # Lightweight, fast HuggingFace model
 
 # ── Chunking Settings ─────────────────────────────────────────────────────────
-CHUNK_SIZE: int = 500                        # Characters per chunk
-CHUNK_OVERLAP: int = 50                      # Overlap between chunks
+CHUNK_SIZE: int = 600                        # Characters per chunk (≈150 tokens)
+CHUNK_OVERLAP: int = 100                     # Improved overlap for continuity
 
 # ── Retriever Settings ────────────────────────────────────────────────────────
-TOP_K_RESULTS: int = 5                       # Number of chunks to retrieve per query
+TOP_K_RESULTS: int = 4                       # Reduced but more precise results
 
 # ── Memory Settings ───────────────────────────────────────────────────────────
-MEMORY_WINDOW_K: int = 4                     # Keep last 4 conversation turns (≈ 3–5 rule)
+MEMORY_MAX_TOKENS: int = 1500                # Summarize when history > 1500 tokens
 
 # ── File Paths ────────────────────────────────────────────────────────────────
 BOOKS_DIR: str = "books"                     # Directory containing PDF books

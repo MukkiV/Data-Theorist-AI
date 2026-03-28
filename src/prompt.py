@@ -1,9 +1,9 @@
 """
-prompt.py — Teaching-style prompt templates for Data Theorist AI.
-Defines the system persona and structured response format.
+prompt.py — Teaching-style chat prompts for Data Theorist AI.
+Defines the system persona and structured response format using Chat Templates.
 """
 
-from langchain_classic.prompts import PromptTemplate
+from langchain_classic.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 
 
 # ── System Persona ────────────────────────────────────────────────────────────
@@ -11,65 +11,55 @@ SYSTEM_PERSONA = """You are Data Theorist AI — a friendly, expert data science
 Your job is to teach data science concepts clearly and systematically using ONLY the provided book content.
 
 RULES:
-1. Always structure your answer in this exact format (use emojis as shown):
-   📘 **Definition** — Clear, simple definition of the concept
-   💡 **Intuition** — Real-world analogy a beginner can understand
+1. Always structure your answer in this exact format:
+   📘 **Definition** — Clear, simple definition
+   💡 **Intuition** — Real-world analogy
    🧪 **Example** — Concrete code snippet or practical example
-   📝 **Notes** — Key takeaways, common mistakes, or important edge cases
-   📚 **Source** — The book name(s) the answer is based on
+   📝 **Notes** — Key takeaways or edge cases
+   📚 **Source** — The book name(s)
 
-2. Keep language simple and beginner-friendly UNLESS the user asks for advanced details.
-3. ONLY use the information from the provided context (book excerpts). Do NOT invent facts.
-4. If the context doesn't contain enough information, honestly say so and suggest what topic to look up.
-5. Be encouraging, warm, and patient — like a real tutor.
-6. Always include the 📚 Source section with the book name from the context metadata.
+2. ONLY use the provided context. If context is insufficient, say so.
+3. Keep language simple and beginner-friendly.
+4. Use emojis to make the learning experience engaging.
 """
 
 
-# ── RAG Prompt Template ───────────────────────────────────────────────────────
-RAG_PROMPT_TEMPLATE = """
-{system_persona}
-
----
-
-📖 **Relevant Book Excerpts:**
-{context}
-
----
-
-🗂️ **Conversation History:**
-{chat_history}
-
----
-
-🎓 **Student's Question:**
-{question}
-
----
-
-Now provide a structured, teaching-style answer following the format above:
-"""
-
-RAG_PROMPT = PromptTemplate(
-    input_variables=["system_persona", "context", "chat_history", "question"],
-    template=RAG_PROMPT_TEMPLATE,
-)
+# ── Modern Chat Prompt Template ──────────────────────────────────────────────
+# We use specific message roles to help the LLM distinguish between
+# instructions, retrieved context, and user history.
+RAG_CHAT_PROMPT = ChatPromptTemplate.from_messages([
+    SystemMessagePromptTemplate.from_template(SYSTEM_PERSONA),
+    HumanMessagePromptTemplate.from_template(
+        "📖 **Context from Books:**\n{context}\n\n"
+        "--- \n\n"
+        "🗂️ **Conversation History:**\n{chat_history}\n\n"
+        "--- \n\n"
+        "🎓 **Student's Question:** {question}"
+    ),
+])
 
 
 def build_prompt(context: str, chat_history: str, question: str) -> str:
-    """Format the full prompt with all variables filled in.
-
-    Args:
-        context: Retrieved book excerpts (with source labels).
-        chat_history: Recent conversation history as a string.
-        question: The user's current question.
-
-    Returns:
-        str: The fully formatted prompt string ready for the LLM.
+    """Format the chat prompt into a single string for legacy handlers or return the template.
+    
+    In a modern LCEL chain, we would just pass the RAG_CHAT_PROMPT.
+    For compatibility with the existing run_rag_chain, we'll format it.
     """
-    return RAG_PROMPT.format(
-        system_persona=SYSTEM_PERSONA,
+    # Formatting into a string representation of the messages
+    messages = RAG_CHAT_PROMPT.format_messages(
         context=context,
         chat_history=chat_history if chat_history else "No previous conversation.",
-        question=question,
+        question=question
     )
+    
+    # Concatenate messages for the legacy .invoke(string) call in chain.py
+    # (Though we will refactor chain.py to handle this better)
+    full_prompt = ""
+    for m in messages:
+        full_prompt += f"{m.content}\n\n"
+    return full_prompt.strip()
+
+
+def get_chat_prompt_template():
+    """Returns the structured ChatPromptTemplate for LCEL chains."""
+    return RAG_CHAT_PROMPT

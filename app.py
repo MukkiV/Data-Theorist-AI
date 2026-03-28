@@ -118,13 +118,13 @@ def load_resources():
 
 
 # ── Session State Initialization ──────────────────────────────────────────────
-def init_session_state() -> None:
+def init_session_state(llm=None) -> None:
     """Initialize all session state variables."""
     if "messages" not in st.session_state:
         st.session_state.messages = []       # Chat history for display
-    if "memory" not in st.session_state:
+    if "memory" not in st.session_state and llm:
         from src.memory import create_memory
-        st.session_state.memory = create_memory()
+        st.session_state.memory = create_memory(llm)
     if "total_tokens" not in st.session_state:
         st.session_state.total_tokens = 0
     if "message_count" not in st.session_state:
@@ -178,9 +178,9 @@ def render_sidebar(token_tracker) -> None:
 
         # Settings
         st.markdown("### ⚙️ Settings")
-        st.caption("**Model:** Llama 3 (8B) via Groq")
-        st.caption("**Memory:** Last 4 conversation turns")
-        st.caption("**Top-K:** 5 book chunks per query")
+        st.caption("**Model:** Llama 3.1 (8B) via Groq")
+        st.caption("**Memory:** Summary Buffer (Token-based)")
+        st.caption("**Top-K:** 4 optimized chunks")
 
         st.divider()
 
@@ -188,7 +188,10 @@ def render_sidebar(token_tracker) -> None:
         if st.button("🗑️ Clear Conversation", use_container_width=True):
             st.session_state.messages = []
             from src.memory import create_memory
-            st.session_state.memory = create_memory()
+            # Access llm from loaded resources
+            from src.chain import create_llm
+            llm = create_llm()
+            st.session_state.memory = create_memory(llm)
             token_tracker.reset()
             st.session_state.message_count = 0
             st.rerun()
@@ -203,8 +206,6 @@ def render_sidebar(token_tracker) -> None:
 # ── Main App ──────────────────────────────────────────────────────────────────
 def main() -> None:
     """Main Streamlit application logic."""
-    init_session_state()
-
     # Load resources (cached — runs once)
     try:
         vector_store, llm, token_tracker = load_resources()
@@ -222,6 +223,9 @@ def main() -> None:
     except ValueError as e:
         st.error(f"## ❌ Configuration Error\n\n{e}")
         st.stop()
+
+    # Initialize state with LLM (for memory summarization)
+    init_session_state(llm)
 
     # Render sidebar
     render_sidebar(token_tracker)

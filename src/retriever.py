@@ -1,48 +1,58 @@
 """
 retriever.py — Handles document retrieval from the FAISS vector store.
-Returns top-K relevant chunks for a given query.
+Returns optimized, diverse, and compressed chunks.
 """
 
 import logging
 from langchain_community.vectorstores import FAISS
 from langchain_classic.schema import Document
+from langchain_classic.retrievers import ContextualCompressionRetriever
+from langchain_classic.retrievers.document_compressors import EmbeddingsFilter
 
 from src.config import TOP_K_RESULTS
 
 logger = logging.getLogger(__name__)
 
 
-def get_retriever(vector_store: FAISS):
-    """Create a LangChain retriever from the vector store.
+def get_optimized_retriever(vector_store: FAISS, embeddings):
+    """Create an optimized retriever with MMR and Contextual Compression.
+
+    MMR (Maximum Marginal Relevance) ensures we get diverse chunks,
+    avoiding redundant information. Contextual Compression filters
+    out chunks that don't meet a relevance threshold.
 
     Args:
         vector_store: A loaded FAISS vector store instance.
+        embeddings: The embedding model for compression filtering.
 
     Returns:
-        A LangChain VectorStoreRetriever configured with top-K results.
+        ContextualCompressionRetriever: A precision-tuned retriever.
     """
-    retriever = vector_store.as_retriever(
-        search_type="similarity",
-        search_kwargs={"k": TOP_K_RESULTS},
+    # 1. Base retriever with MMR for diversity
+    base_retriever = vector_store.as_retriever(
+        search_type="mmr",
+        search_kwargs={
+            "k": TOP_K_RESULTS,
+            "fetch_k": 20,    # Fetch 20, then pick top-K diverse ones
+            "lambda_mult": 0.6 # 0.5 is balanced, 0.7 is more relevance-focused
+        },
     )
-    logger.info(f"Retriever created with top_k={TOP_K_RESULTS}")
-    return retriever
 
+    # 2. Contextual compressor (EmbeddingsFilter)
+    # Drops any chunks with < 0.7 similarity to the query
+    compressor = EmbeddingsFilter(
+        embeddings=embeddings, 
+        similarity_threshold=0.7
+    )
 
-def retrieve_context(vector_store: FAISS, query: str) -> list[Document]:
-    """Retrieve the most relevant document chunks for a query.
+    # 3. Combine into a compression retriever
+    compression_retriever = ContextualCompressionRetriever(
+        base_compressor=compressor, 
+        base_retriever=base_retriever
+    )
 
-    Args:
-        vector_store: A loaded FAISS vector store instance.
-        query: The user's question or search string.
-
-    Returns:
-        list[Document]: Top-K relevant document chunks with metadata.
-    """
-    logger.info(f"Retrieving context for query: '{query[:60]}...'")
-    docs = vector_store.similarity_search(query, k=TOP_K_RESULTS)
-    logger.info(f"Retrieved {len(docs)} chunks")
-    return docs
+    logger.info(f"Optimized retriever created (MMR k={TOP_K_RESULTS}, Compression enabled)")
+    return compression_retriever
 
 
 def format_context_with_sources(docs: list[Document]) -> tuple[str, list[str]]:
@@ -61,7 +71,11 @@ def format_context_with_sources(docs: list[Document]) -> tuple[str, list[str]]:
         source = doc.metadata.get("source", "Unknown Source")
         if source not in sources:
             sources.append(source)
-        context_parts.append(f"[Chunk {i} — {source}]\n{doc.page_content.strip()}")
+        
+        # Clean up content: remove excessive newlines/whitespace
+        content = doc.page_content.replace("\n\n", "\n").strip()
+        context_parts.append(f"[{source}]\n{content}")
 
-    context_str = "\n\n".join(context_parts)
+    # Use a smaller separator to save tokens
+    context_str = "\n---\n".join(context_parts)
     return context_str, sources

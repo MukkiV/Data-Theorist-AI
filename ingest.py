@@ -47,9 +47,13 @@ def main() -> None:
         docs = load_pdfs()
 
         # Step 3: Split into chunks
+        from src.config import CHUNK_SIZE
+        logger.info(f"Splitting documents into chunks (size={CHUNK_SIZE})...")
         chunks = split_documents(docs)
+        logger.info(f"Generated {len(chunks)} total chunks for embedding.")
 
         # Step 4: Build and save vector store
+        logger.info("Starting embedding process... This may take several minutes depending on your CPU.")
         build_vector_store(chunks, embeddings)
 
         logger.info("=" * 55)
