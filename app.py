@@ -633,10 +633,10 @@ def main() -> None:
                 token_tracker=token_tracker,
             )
 
-            answer = result["answer"]
-            sources = result["sources"]
-            tokens = result["tokens"]
-            resp_time = result["response_time"]
+            answer = result.get("answer", "No answer generated.")
+            sources = result.get("sources", [])
+            tokens = result.get("tokens", {})
+            resp_time = result.get("response_time", 0)
 
             # Clear typing and show final
             typing_container.empty()

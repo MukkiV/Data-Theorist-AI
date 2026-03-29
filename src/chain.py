@@ -3,6 +3,7 @@ chain.py — Assembles the optimized RAG pipeline.
 Integrates compressed retrieval, summarized memory, and chat prompts.
 """
 
+import time
 import logging
 from langchain_groq import ChatGroq
 from langchain_community.vectorstores import FAISS
@@ -61,7 +62,6 @@ def run_rag_chain(
             "tokens": dict[str, int],
         }
     """
-    import time
     start_time = time.time()
     try:
         # 1. Get embedding model for the compression retriever
