@@ -61,6 +61,8 @@ def run_rag_chain(
             "tokens": dict[str, int],
         }
     """
+    import time
+    start_time = time.time()
     try:
         # 1. Get embedding model for the compression retriever
         embeddings = get_embedding_model()
@@ -87,6 +89,8 @@ def run_rag_chain(
         logger.info(f"Calling LLM ({GROQ_MODEL})...")
         response = llm.invoke(prompt_text)
         answer = response.content
+        
+        response_time = time.time() - start_time
 
         # 6. Track tokens
         token_usage = getattr(response, 'response_metadata', {}).get('token_usage', {})
@@ -105,6 +109,7 @@ def run_rag_chain(
             "answer": answer,
             "sources": sources,
             "tokens": token_stats,
+            "response_time": response_time,
         }
 
     except Exception as e:
@@ -113,4 +118,5 @@ def run_rag_chain(
             "answer": f"❌ Optimization Error: {str(e)}",
             "sources": [],
             "tokens": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            "response_time": 0,
         }
